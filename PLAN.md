@@ -78,11 +78,30 @@ events and play-by-play rows.
       into one per-quarter timeline, tested
 - [x] `find_frame_for_clock()` — match a play-by-play clock to a tracking
       frame, with late-coverage detection, tested
-- [ ] Parse a play-by-play shot row into `(quarter, game_clock, event_id)`
-- [ ] Join tracking eventId to play-by-play actionNumber
-- [ ] Download + extract one real game (tracking `.7z` + play-by-play) to
-      verify the join against real data, not just fixtures
-- [ ] Output a clean labeled shot dataset to `data/processed/`
+- [x] `parse_shot_events()` — parse a play-by-play shot row into
+      `{event_id, quarter, game_clock, made}`, tested (field names/formats
+      confirmed against the installed `nba_api` package and a real
+      `PlayByPlayV3` response)
+- [x] `match_shots_to_frames()` — ties parsed shots to matched frames by
+      quarter + game clock, tested
+- [x] Downloaded + extracted one real game (`0021500480`, GSW @ DAL,
+      2015-12-30) and validated the whole pipeline against it: ball
+      positions line up with shot descriptions (e.g. a 15ft fadeaway lands
+      the ball right by the rim), across all 4 quarters, not just one.
+      Found and fixed a real edge case doing this — a frame can have no
+      ball entry at all (untracked/occluded) even when it otherwise
+      matches; those shots are now dropped like coverage-gap shots are.
+- [x] `build_shot_dataset()` / `write_shot_dataset()` — assembles the final
+      per-shot rows (shooter identity, make/miss, raw ball/player
+      positions) and writes them as JSON Lines. Ran end-to-end on the real
+      game: 163 shots in, 157 written (5 dropped for coverage gaps, 1 for
+      the missing-ball case), output at `data/processed/0021500480.jsonl`.
+
+**Not yet done:** this has only been run on one game. The roadmap's actual
+goal is a full-season dataset across all ~42 available Warriors games —
+that needs a batch driver (download+run this pipeline per game, probably
+with per-game error handling since more edge cases likely show up at
+scale) which doesn't exist yet.
 
 ## Roadmap (not started)
 
