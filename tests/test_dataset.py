@@ -76,6 +76,22 @@ def test_drops_shots_with_no_matched_frame():
     assert rows == []
 
 
+def test_drops_shots_whose_frame_has_no_ball_entry():
+    # ball is occasionally untracked/occluded for a given frame -- no [-1, -1, ...] entry
+    events = [
+        {
+            "moments": [
+                _moment(1, 1000, 690.0, [[1610612744, 201939, 5.0, 24.0]]),
+            ]
+        }
+    ]
+    pbp_rows = [_pbp_row(10, 1, "PT11M30.00S", True, shot_result="Made")]
+
+    rows = build_shot_dataset("0021500480", pbp_rows, events)
+
+    assert rows == []
+
+
 def test_write_shot_dataset_writes_one_json_object_per_line(tmp_path):
     rows = [
         {"event_id": 1, "made": True},
