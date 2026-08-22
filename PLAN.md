@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-22
+Last updated: 2026-08-22 (evening)
 
 ## The pitch
 
@@ -29,10 +29,10 @@ vs. expected reveals who's over/underperforming shot difficulty.
   play-by-play's `actionNumber` (int) for the same play. Cast eventId to int
   when joining.
 
-## Known open technical issue (not yet solved — do this properly, in code)
+## Shot-to-frame join (core mechanism, mostly built)
 
-Finding the exact tracking *frame* that corresponds to a given shot is
-trickier than expected:
+Finding the exact tracking *frame* that corresponds to a given shot was
+trickier than expected — two problems, both now solved in code:
 
 - Each tracking "event" is a clip of moments, but consecutive events'
   moments **overlap** (each new event repeats trailing frames from the
@@ -42,17 +42,26 @@ trickier than expected:
   tracking in the sample game starts at 680.93s remaining, not 720s) — the
   first shot(s) of a quarter may have no matching frame at all. This needs
   to be detected and those shots dropped/flagged, not silently mismatched.
-- Best validated approach so far: merge+dedupe all moments across all events
-  by epoch timestamp into one continuous per-quarter timeline, then find the
-  frame with the closest game-clock value to the play-by-play action's
-  clock. This worked cleanly (exact clock match, plausible ball/player
-  positions) for shots later in a quarter in the one sample game tested
-  (`0021500480`, GSW @ DAL, 2015-12-30). Not yet verified: whether ball
-  position sanity-checks out for all shot types, and whether this holds
-  across other games.
-- **Next step here:** build this as a real function in
-  `src/closeout/data/` with unit tests (using a small fixture, not live
-  downloads) — not more scratchpad experiments.
+
+**Done**, on `feature/data-ingestion`, in `src/closeout/data/tracking.py`
+(tested with hand-built fixtures, not live downloads):
+- `build_quarter_timelines(events)` — merges+dedupes all moments across all
+  events by epoch timestamp into one continuous per-quarter timeline.
+- `find_frame_for_clock(timeline, target_clock)` — finds the frame with the
+  closest game-clock value to a play-by-play action's clock; returns `None`
+  (instead of a wrong guess) when tracking coverage starts after the target
+  clock already elapsed.
+
+This approach worked cleanly (exact clock match, plausible ball/player
+positions) on the one sample game tested by hand so far
+(`0021500480`, GSW @ DAL, 2015-12-30). **Not yet verified:** ball position
+sanity-checking across all shot types, and whether this holds across other
+games — that verification wants real downloaded data, not just fixtures.
+
+**Next step here:** parse a raw play-by-play shot event into
+`(quarter, game_clock, event_id)` — the actual input `find_frame_for_clock`
+needs — then wire up the eventId ↔ actionNumber join between tracking
+events and play-by-play rows.
 
 ## Status: Stage 1 — project scaffolding (in progress)
 
@@ -62,6 +71,37 @@ trickier than expected:
 - [x] Confirmed `nba_api`'s `PlayByPlayV3` works and the join key lines up
 - [x] Folder structure, README, requirements.txt, .gitignore, LICENSE
 - [x] First commit made (not pushed yet — nothing functional exists yet)
+
+## Status: Stage 1 — data ingestion module (in progress, on `feature/data-ingestion`)
+
+- [x] `build_quarter_timelines()` — dedupe/merge overlapping tracking events
+      into one per-quarter timeline, tested
+- [x] `find_frame_for_clock()` — match a play-by-play clock to a tracking
+      frame, with late-coverage detection, tested
+- [x] `parse_shot_events()` — parse a play-by-play shot row into
+      `{event_id, quarter, game_clock, made}`, tested (field names/formats
+      confirmed against the installed `nba_api` package and a real
+      `PlayByPlayV3` response)
+- [x] `match_shots_to_frames()` — ties parsed shots to matched frames by
+      quarter + game clock, tested
+- [x] Downloaded + extracted one real game (`0021500480`, GSW @ DAL,
+      2015-12-30) and validated the whole pipeline against it: ball
+      positions line up with shot descriptions (e.g. a 15ft fadeaway lands
+      the ball right by the rim), across all 4 quarters, not just one.
+      Found and fixed a real edge case doing this — a frame can have no
+      ball entry at all (untracked/occluded) even when it otherwise
+      matches; those shots are now dropped like coverage-gap shots are.
+- [x] `build_shot_dataset()` / `write_shot_dataset()` — assembles the final
+      per-shot rows (shooter identity, make/miss, raw ball/player
+      positions) and writes them as JSON Lines. Ran end-to-end on the real
+      game: 163 shots in, 157 written (5 dropped for coverage gaps, 1 for
+      the missing-ball case), output at `data/processed/0021500480.jsonl`.
+
+**Not yet done:** this has only been run on one game. The roadmap's actual
+goal is a full-season dataset across all ~42 available Warriors games —
+that needs a batch driver (download+run this pipeline per game, probably
+with per-game error handling since more edge cases likely show up at
+scale) which doesn't exist yet.
 
 ## Roadmap (not started)
 
