@@ -33,3 +33,24 @@ def build_quarter_timelines(events: list[dict]) -> dict[int, list[list]]:
         quarter: [moments[timestamp] for timestamp in sorted(moments)]
         for quarter, moments in moments_by_quarter.items()
     }
+
+
+def find_frame_for_clock(timeline: list[list], target_clock: float) -> list | None:
+    """Find the frame in a quarter's timeline closest to a play-by-play game clock.
+
+    `timeline` must already be one quarter's deduped, time-ordered moments,
+    e.g. one value from build_quarter_timelines()'s result.
+
+    Returns None if tracking coverage for the quarter starts after the shot
+    already happened -- tracking doesn't always start at the true beginning
+    of a quarter, so the earliest frame available can already show a lower
+    game clock than the shot we're looking for. That's a real gap, not
+    something to paper over with a "closest available" guess.
+    """
+    if not timeline:
+        return None
+
+    if timeline[0][MOMENT_GAME_CLOCK] < target_clock:
+        return None
+
+    return min(timeline, key=lambda moment: abs(moment[MOMENT_GAME_CLOCK] - target_clock))

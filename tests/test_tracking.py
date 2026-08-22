@@ -1,4 +1,4 @@
-from closeout.data.tracking import build_quarter_timelines
+from closeout.data.tracking import build_quarter_timelines, find_frame_for_clock
 
 
 def _moment(quarter, timestamp, game_clock):
@@ -40,3 +40,34 @@ def test_orders_moments_by_timestamp_even_if_input_is_out_of_order():
     timelines = build_quarter_timelines([event])
 
     assert [moment[1] for moment in timelines[1]] == [1000, 2000, 3000]
+
+
+def test_find_frame_for_clock_returns_exact_match():
+    timeline = [_moment(1, 1000, 700.0), _moment(1, 1040, 699.0), _moment(1, 1080, 698.0)]
+
+    frame = find_frame_for_clock(timeline, 699.0)
+
+    assert frame[1] == 1040
+
+
+def test_find_frame_for_clock_returns_closest_when_no_exact_match():
+    timeline = [_moment(1, 1000, 700.0), _moment(1, 1040, 699.0), _moment(1, 1080, 698.0)]
+
+    # 698.4 is closer to 698.0 than to 699.0
+    frame = find_frame_for_clock(timeline, 698.4)
+
+    assert frame[1] == 1080
+
+
+def test_find_frame_for_clock_returns_none_when_tracking_starts_late():
+    # Tracking coverage starts at 680.93s remaining, like the sample game in
+    # PLAN.md -- a shot at 700s remaining happened before tracking picks up.
+    timeline = [_moment(1, 1000, 680.93), _moment(1, 1040, 679.0)]
+
+    frame = find_frame_for_clock(timeline, 700.0)
+
+    assert frame is None
+
+
+def test_find_frame_for_clock_returns_none_for_empty_timeline():
+    assert find_frame_for_clock([], 700.0) is None
