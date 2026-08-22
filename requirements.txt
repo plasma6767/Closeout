@@ -1,0 +1,22 @@
+# Data acquisition / parsing
+requests
+py7zr
+nba_api
+
+# Data handling
+pandas
+numpy
+
+# Modeling
+scikit-learn
+xgboost
+
+# Visualization / dashboard
+matplotlib
+seaborn
+streamlit
+
+# Dev / testing
+pytest
+jupyter
+tqdm
