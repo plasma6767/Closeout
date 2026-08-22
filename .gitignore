@@ -18,7 +18,3 @@ data/processed/*
 
 # Env
 .env
-
-# Local-only working docs (not part of the public repo)
-CLAUDE.md
-PLAN.md
