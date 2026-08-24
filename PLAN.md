@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-22 (evening)
+Last updated: 2026-08-24
 
 ## The pitch
 
@@ -72,7 +72,7 @@ events and play-by-play rows.
 - [x] Folder structure, README, requirements.txt, .gitignore, LICENSE
 - [x] First commit made (not pushed yet — nothing functional exists yet)
 
-## Status: Stage 1 — data ingestion module (in progress, on `feature/data-ingestion`)
+## Status: Stage 1 — data ingestion module (done)
 
 - [x] `build_quarter_timelines()` — dedupe/merge overlapping tracking events
       into one per-quarter timeline, tested
@@ -97,19 +97,40 @@ events and play-by-play rows.
       game: 163 shots in, 157 written (5 dropped for coverage gaps, 1 for
       the missing-ball case), output at `data/processed/0021500480.jsonl`.
 
-**Not yet done:** this has only been run on one game. The roadmap's actual
-goal is a full-season dataset across all ~42 available Warriors games —
-that needs a batch driver (download+run this pipeline per game, probably
-with per-game error handling since more edge cases likely show up at
-scale) which doesn't exist yet.
+**Done**, on `feature/batch-ingestion`:
+- Resolved the game_id ↔ tracking-file join for all 42 available Warriors
+  games (matched the Warriors' 2015-16 schedule from `nba_api`'s
+  `TeamGameLog` against the tracking mirror's file listing, by date — a
+  team plays at most one game per day so this is an unambiguous 1:1 join,
+  verified all 42 dates matched with no leftovers). Pinned as a static
+  resource (`src/closeout/data/resources/warriors_2015_16_games.json`)
+  since the season is historical and frozen — no reason to re-derive this
+  from two live APIs on every run.
+- `download.py` — fetches and caches (skips re-fetching if already on
+  disk) both raw inputs per game: the tracking `.7z` archive, and
+  play-by-play rows via `PlayByPlayV3`.
+- `batch.py` — runs the existing single-game pipeline once per game,
+  isolating each in its own try/except so one bad game doesn't kill the
+  run, and reports a per-game success/failure summary.
+- Ran the full batch for real: **42/42 games processed, 7,332 shots
+  total**, written to `data/processed/{game_id}.jsonl`. The one
+  previously hand-validated game (`0021500480`) still produces exactly
+  157 shots through the automated path, matching the earlier manual
+  result.
 
-## Roadmap (not started)
+**Known limitation, not a bug:** the tracking mirror only has games
+through 2016-01-22 — checked, and this is a hard cutoff across the whole
+mirror (all 30 teams, not just the Warriors), so it's not a
+Warriors-specific or home/away-biased gap. It just means this dataset
+covers roughly the first half of the 82-game season, not the full
+73-9/402-three campaign. Doesn't affect the shot-quality modeling
+methodology, but the eventual Curry write-up (roadmap item 4) needs to
+frame results as "first half of the season" rather than implying the
+full season.
 
-1. **Data ingestion module** (`src/closeout/data/`): download N Warriors
-   games, extract, parse moments + play-by-play, resolve the shot-moment
-   join issue above with real tests, output a clean labeled shot dataset
-   (one row per shot: shooter, defender distances/angles, distance to
-   basket, shot clock, make/miss, etc.) to `data/processed/`.
+## Roadmap
+
+1. ~~**Data ingestion module**~~ — done, see above.
 2. **Feature engineering** (`src/closeout/features/`): closest/second-
    closest defender distance & angle, shot distance/angle from basket,
    shooter speed, catch-and-shoot vs. off-dribble, quarter/clock context.
