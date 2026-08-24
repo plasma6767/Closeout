@@ -60,3 +60,24 @@ def test_preserves_shot_order_and_all_shot_fields():
     assert [shot["event_id"] for shot in matched] == [105, 106]
     assert matched[0]["made"] is False
     assert matched[1]["made"] is True
+
+
+def test_also_matches_a_prior_frame_about_one_second_before_the_shot():
+    # game clock counts down, so "1 second earlier" is a larger clock value
+    events = [{"moments": [_moment(1, 1000, 701.0), _moment(1, 1040, 700.0)]}]
+    shots = [_shot(107, 1, 700.0)]
+
+    matched = match_shots_to_frames(events, shots)
+
+    assert matched[0]["frame"][1] == 1040
+    assert matched[0]["prior_frame"][1] == 1000
+
+
+def test_prior_frame_is_none_when_coverage_does_not_reach_far_enough_back():
+    events = [{"moments": [_moment(1, 1000, 700.5)]}]
+    shots = [_shot(108, 1, 700.0)]
+
+    matched = match_shots_to_frames(events, shots)
+
+    assert matched[0]["frame"][1] == 1000
+    assert matched[0]["prior_frame"] is None

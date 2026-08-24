@@ -6,8 +6,40 @@ import json
 
 from closeout.data.matching import match_shots_to_frames
 from closeout.data.playbyplay import parse_shot_events
+from closeout.data.tracking import MOMENT_GAME_CLOCK
 
 BALL_TEAM_ID = -1
+
+
+def _positions_from_frame(frame: list) -> tuple[list, list] | None:
+    """Split a frame's positions into (ball, players), or None if the ball wasn't tracked."""
+    positions = frame[5]
+    ball = next((p for p in positions if p[0] == BALL_TEAM_ID), None)
+    if ball is None:
+        return None
+    players = [
+        {"team_id": p[0], "player_id": p[1], "x": p[2], "y": p[3]}
+        for p in positions
+        if p[0] != BALL_TEAM_ID
+    ]
+    return ball, players
+
+
+def _prior_frame_fields(prior_frame: list | None) -> dict:
+    """Prior-frame ball/player positions for later speed features, or {} if unavailable."""
+    if prior_frame is None:
+        return {}
+    split = _positions_from_frame(prior_frame)
+    if split is None:
+        return {}
+    ball, players = split
+    return {
+        "prior_game_clock": prior_frame[MOMENT_GAME_CLOCK],
+        "prior_ball_x": ball[2],
+        "prior_ball_y": ball[3],
+        "prior_ball_z": ball[4],
+        "prior_players": players,
+    }
 
 
 def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -> list[dict]:
@@ -17,8 +49,11 @@ def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -
     when: there's no matched frame (tracking coverage gaps -- see
     match_shots_to_frames), or the matched frame has no ball entry at all
     (the ball is occasionally untracked/occluded for a given frame in the
-    raw data). Defender distance/angle and other derived features are
-    computed later, in features/, not here.
+    raw data). Each row also carries positions from about a second before
+    the shot (prior_* fields, absent if that frame isn't available) so
+    features like closing speed can be computed later without needing the
+    raw tracking data again. Defender distance/angle and other derived
+    features are computed later, in features/, not here.
     """
     shots = parse_shot_events(pbp_rows)
     matched = match_shots_to_frames(events, shots)
@@ -29,33 +64,29 @@ def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -
         if shot["frame"] is None:
             continue
 
-        pbp_row = pbp_by_action_number[shot["event_id"]]
-        positions = shot["frame"][5]
-        ball = next((p for p in positions if p[0] == BALL_TEAM_ID), None)
-        if ball is None:
+        split = _positions_from_frame(shot["frame"])
+        if split is None:
             continue
-        players = [
-            {"team_id": p[0], "player_id": p[1], "x": p[2], "y": p[3]}
-            for p in positions
-            if p[0] != BALL_TEAM_ID
-        ]
+        ball, players = split
 
-        rows.append(
-            {
-                "game_id": game_id,
-                "event_id": shot["event_id"],
-                "quarter": shot["quarter"],
-                "game_clock": shot["game_clock"],
-                "shooter_id": pbp_row["personId"],
-                "shooter_name": pbp_row["playerName"],
-                "team": pbp_row["teamTricode"],
-                "made": shot["made"],
-                "ball_x": ball[2],
-                "ball_y": ball[3],
-                "ball_z": ball[4],
-                "players": players,
-            }
-        )
+        pbp_row = pbp_by_action_number[shot["event_id"]]
+        row = {
+            "game_id": game_id,
+            "event_id": shot["event_id"],
+            "quarter": shot["quarter"],
+            "game_clock": shot["game_clock"],
+            "shooter_id": pbp_row["personId"],
+            "shooter_name": pbp_row["playerName"],
+            "team": pbp_row["teamTricode"],
+            "made": shot["made"],
+            "ball_x": ball[2],
+            "ball_y": ball[3],
+            "ball_z": ball[4],
+            "players": players,
+        }
+        row.update(_prior_frame_fields(shot["prior_frame"]))
+
+        rows.append(row)
 
     return rows
 
