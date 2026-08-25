@@ -2,70 +2,65 @@ import json
 from unittest.mock import MagicMock, patch
 
 import py7zr
+import pytest
 
 from closeout.data.download import download_tracking_events, fetch_playbyplay_rows
 
 
-def _write_archive(path, game_id, events):
-    with py7zr.SevenZipFile(path, mode="w") as archive:
+def _build_archive_bytes(tmp_path, game_id, events):
+    archive_path = tmp_path / "source.7z"
+    with py7zr.SevenZipFile(archive_path, mode="w") as archive:
         archive.writestr(json.dumps({"gameid": game_id, "gamedate": "", "events": events}), f"{game_id}.json")
+    return archive_path.read_bytes()
 
 
-def test_download_tracking_events_downloads_and_extracts_when_not_cached(tmp_path):
+def test_download_tracking_events_downloads_and_extracts(tmp_path):
     events = [{"eventId": "1", "moments": []}]
-    source_path = tmp_path / "source.7z"
-    _write_archive(source_path, "0021500480", events)
-    archive_bytes = source_path.read_bytes()
+    archive_bytes = _build_archive_bytes(tmp_path, "0021500480", events)
 
-    raw_dir = tmp_path / "raw"
     with patch("closeout.data.download.requests.get") as mock_get:
         mock_get.return_value = MagicMock(content=archive_bytes)
-        result = download_tracking_events("0021500480", "http://example.com/x.7z", raw_dir)
+        result = download_tracking_events("0021500480", "http://example.com/x.7z")
 
     assert result == events
     mock_get.assert_called_once_with("http://example.com/x.7z", timeout=60)
-    assert (raw_dir / "0021500480.7z").exists()
-    assert (raw_dir / "0021500480.json").exists()
 
 
-def test_download_tracking_events_skips_download_when_archive_already_cached(tmp_path):
+def test_download_tracking_events_does_not_write_into_the_working_directory(tmp_path, monkeypatch):
     events = [{"eventId": "1", "moments": []}]
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
-    _write_archive(raw_dir / "0021500480.7z", "0021500480", events)
+    archive_bytes = _build_archive_bytes(tmp_path, "0021500480", events)
+    monkeypatch.chdir(tmp_path)
 
     with patch("closeout.data.download.requests.get") as mock_get:
-        result = download_tracking_events("0021500480", "http://example.com/x.7z", raw_dir)
+        mock_get.return_value = MagicMock(content=archive_bytes)
+        download_tracking_events("0021500480", "http://example.com/x.7z")
 
-    mock_get.assert_not_called()
-    assert result == events
+    # only the fixture archive we built above should be here -- nothing new
+    assert [p.name for p in tmp_path.iterdir()] == ["source.7z"]
 
 
-def test_fetch_playbyplay_rows_fetches_and_caches_when_not_cached(tmp_path):
+def test_download_tracking_events_raises_a_clear_error_for_an_empty_archive(tmp_path):
+    # some games in the source mirror have a valid but empty .7z archive
+    empty_archive_path = tmp_path / "empty.7z"
+    with py7zr.SevenZipFile(empty_archive_path, mode="w"):
+        pass
+    archive_bytes = empty_archive_path.read_bytes()
+
+    with patch("closeout.data.download.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(content=archive_bytes)
+        with pytest.raises(ValueError, match="0021500999"):
+            download_tracking_events("0021500999", "http://example.com/x.7z")
+
+
+def test_fetch_playbyplay_rows_fetches_from_playbyplayv3():
     rows = [{"actionNumber": 1, "isFieldGoal": True}]
-    raw_dir = tmp_path / "raw"
-
     fake_dataframe = MagicMock()
     fake_dataframe.to_dict.return_value = rows
     fake_response = MagicMock()
     fake_response.get_data_frames.return_value = [fake_dataframe]
 
     with patch("closeout.data.download.playbyplayv3.PlayByPlayV3", return_value=fake_response) as mock_cls:
-        result = fetch_playbyplay_rows("0021500480", raw_dir)
+        result = fetch_playbyplay_rows("0021500480")
 
     assert result == rows
     mock_cls.assert_called_once_with(game_id="0021500480")
-    assert json.loads((raw_dir / "0021500480_pbp.json").read_text()) == rows
-
-
-def test_fetch_playbyplay_rows_uses_cache_when_present(tmp_path):
-    rows = [{"actionNumber": 1, "isFieldGoal": True}]
-    raw_dir = tmp_path / "raw"
-    raw_dir.mkdir()
-    (raw_dir / "0021500480_pbp.json").write_text(json.dumps(rows))
-
-    with patch("closeout.data.download.playbyplayv3.PlayByPlayV3") as mock_cls:
-        result = fetch_playbyplay_rows("0021500480", raw_dir)
-
-    mock_cls.assert_not_called()
-    assert result == rows
