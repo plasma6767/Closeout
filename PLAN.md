@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 
 ## The pitch
 
@@ -19,8 +19,8 @@ vs. expected reveals who's over/underperforming shot difficulty.
   mirror of 2015-16 SportVU raw tracking data (last season the NBA released
   raw optical tracking publicly; current tracking is proprietary Second
   Spectrum data, unavailable outside teams). ~5-6MB `.7z` per game, one JSON
-  per game inside. 42 Warriors games available in this mirror (covers roughly
-  Oct 2015 - Jan 22 2016, not the full season).
+  per game inside. 636 games available in this mirror across the whole
+  league (covers roughly Oct 2015 - Jan 22 2016, not the full season).
 - **Labels (make/miss):** tracking data has no shot outcome by itself. Cross-
   reference with official play-by-play via `nba_api`'s `PlayByPlayV3`
   endpoint (NOT `PlayByPlayV2` — deprecated, returns empty data). Game IDs
@@ -97,36 +97,55 @@ events and play-by-play rows.
       game: 163 shots in, 157 written (5 dropped for coverage gaps, 1 for
       the missing-ball case), output at `data/processed/0021500480.jsonl`.
 
-**Done**, on `feature/batch-ingestion`:
-- Resolved the game_id ↔ tracking-file join for all 42 available Warriors
-  games (matched the Warriors' 2015-16 schedule from `nba_api`'s
-  `TeamGameLog` against the tracking mirror's file listing, by date — a
-  team plays at most one game per day so this is an unambiguous 1:1 join,
-  verified all 42 dates matched with no leftovers). Pinned as a static
-  resource (`src/closeout/data/resources/warriors_2015_16_games.json`)
-  since the season is historical and frozen — no reason to re-derive this
-  from two live APIs on every run.
-- `download.py` — fetches and caches (skips re-fetching if already on
-  disk) both raw inputs per game: the tracking `.7z` archive, and
-  play-by-play rows via `PlayByPlayV3`.
-- `batch.py` — runs the existing single-game pipeline once per game,
-  isolating each in its own try/except so one bad game doesn't kill the
-  run, and reports a per-game success/failure summary.
-- Ran the full batch for real: **42/42 games processed, 7,332 shots
-  total**, written to `data/processed/{game_id}.jsonl`. The one
-  previously hand-validated game (`0021500480`) still produces exactly
-  157 shots through the automated path, matching the earlier manual
-  result.
+**Done**, on `feature/batch-ingestion` (superseded by the league-wide join
+below, but the batch-driver mechanics carried forward): resolved the
+game_id ↔ tracking-file join for the 42 available Warriors games, built
+`download.py` + `batch.py` to fetch and run the pipeline per game with
+per-game error isolation, and ran it for real (42/42 games, 7,332 shots).
+
+**Done**, on `feature/league-wide-shot-history`: realized the Warriors-only
+dataset was a problem for modeling, not just for Curry's own stats --
+every non-Warriors shot in it only existed because that team happened to
+play GSW that season, so it wasn't a representative sample of how shots
+of a given difficulty go in around the league. Fixed by widening the pull
+to the whole league:
+- Joined the *full* 2015-16 league schedule (`nba_api`'s
+  `LeagueGameFinder`) against the tracking mirror's file listing, by date
+  + home/away team abbreviations (date alone isn't a unique key once
+  every team is in play, since multiple games happen per night).
+  635 of the mirror's 636 files matched a real game with no ambiguity;
+  one (`01.23.2016.UTA.at.WAS.7z`) doesn't correspond to any game in the
+  official schedule at all and is dropped. Pinned as
+  `src/closeout/data/resources/season_2015_16_games.json`.
+- Went to the whole league also meant the per-game raw tracking data
+  (~100MB decompressed) would've meant tens of GB kept around for no
+  reason. Instead: `match_shots_to_frames()` now also finds a second,
+  "prior" frame from about a second before each shot (game clock counts
+  down, so this reuses the same frame-finder with a shifted target
+  clock), and `build_shot_dataset()` saves both frames' positions per
+  shot (`prior_ball_x/y/z`, `prior_players`, `prior_game_clock`) -- enough
+  to compute closing speed later without ever needing the raw tracking
+  data again. `download.py` no longer persists anything to disk; `batch.py`
+  skips a game whose output file already exists instead of relying on a
+  raw-file cache, which also makes an interrupted run resumable for free.
+- Ran the full batch for real: **632 of 635 games processed, 105,163
+  shots total**, spanning all 30 teams (3,061-3,803 shots each, no team
+  dominating the sample) and 375 distinct shooters. 3 games
+  (`0021500587`, `0021500590`, `0021500589`, all from 2016-01-14) failed
+  for a real reason, not a bug: their tracking archives are valid but
+  genuinely empty at the source (confirmed by downloading and opening
+  them directly -- 32-byte 7z files with zero entries inside). Total
+  disk footprint for the entire run: **187 MB**, all of it the final
+  processed output -- nothing raw was kept.
 
 **Known limitation, not a bug:** the tracking mirror only has games
-through 2016-01-22 — checked, and this is a hard cutoff across the whole
-mirror (all 30 teams, not just the Warriors), so it's not a
-Warriors-specific or home/away-biased gap. It just means this dataset
-covers roughly the first half of the 82-game season, not the full
-73-9/402-three campaign. Doesn't affect the shot-quality modeling
-methodology, but the eventual Curry write-up (roadmap item 4) needs to
-frame results as "first half of the season" rather than implying the
-full season.
+through 2016-01-22 — this is a hard cutoff across the whole mirror (all
+30 teams), not specific to any team. It just means this dataset covers
+roughly the first half of the 82-game season, not the full 73-9/402-three
+campaign. Doesn't affect the shot-quality modeling methodology (the
+cutoff hits everyone equally, so it's not a biased sample), but the
+eventual Curry write-up (roadmap item 4) needs to frame results as "first
+half of the season" rather than implying the full season.
 
 ## Roadmap
 

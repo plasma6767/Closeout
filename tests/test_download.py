@@ -2,6 +2,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 import py7zr
+import pytest
 
 from closeout.data.download import download_tracking_events, fetch_playbyplay_rows
 
@@ -36,6 +37,19 @@ def test_download_tracking_events_does_not_write_into_the_working_directory(tmp_
 
     # only the fixture archive we built above should be here -- nothing new
     assert [p.name for p in tmp_path.iterdir()] == ["source.7z"]
+
+
+def test_download_tracking_events_raises_a_clear_error_for_an_empty_archive(tmp_path):
+    # some games in the source mirror have a valid but empty .7z archive
+    empty_archive_path = tmp_path / "empty.7z"
+    with py7zr.SevenZipFile(empty_archive_path, mode="w"):
+        pass
+    archive_bytes = empty_archive_path.read_bytes()
+
+    with patch("closeout.data.download.requests.get") as mock_get:
+        mock_get.return_value = MagicMock(content=archive_bytes)
+        with pytest.raises(ValueError, match="0021500999"):
+            download_tracking_events("0021500999", "http://example.com/x.7z")
 
 
 def test_fetch_playbyplay_rows_fetches_from_playbyplayv3():

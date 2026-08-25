@@ -31,8 +31,12 @@ def download_tracking_events(game_id: str, tracking_url: str) -> list[dict]:
         with py7zr.SevenZipFile(archive_path, mode="r") as archive:
             archive.extractall(path=tmp_dir)
 
-        (json_path,) = Path(tmp_dir).glob("*.json")
-        return json.loads(json_path.read_text())["events"]
+        json_paths = list(Path(tmp_dir).glob("*.json"))
+        if not json_paths:
+            # happens for a handful of games in the mirror whose archive is
+            # a valid but empty 7z file -- nothing to extract, not our bug
+            raise ValueError(f"tracking archive for {game_id} contains no JSON file (source archive is empty)")
+        return json.loads(json_paths[0].read_text())["events"]
 
 
 def fetch_playbyplay_rows(game_id: str) -> list[dict]:
