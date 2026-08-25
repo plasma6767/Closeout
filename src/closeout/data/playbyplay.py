@@ -25,8 +25,8 @@ def parse_shot_events(rows: list[dict]) -> list[dict]:
 
     Only rows with isFieldGoal set are shot attempts -- everything else
     (fouls, rebounds, timeouts, substitutions, etc.) is dropped. Each
-    returned dict has exactly what find_frame_for_clock() needs
-    (event_id, quarter, game_clock) plus the make/miss label.
+    returned dict has exactly what find_release_frame() needs (event_id,
+    quarter, game_clock, shooter_id) plus the make/miss label.
     """
     shots = []
     for row in rows:
@@ -37,6 +37,7 @@ def parse_shot_events(rows: list[dict]) -> list[dict]:
                 "event_id": row["actionNumber"],
                 "quarter": row["period"],
                 "game_clock": parse_game_clock(row["clock"]),
+                "shooter_id": row["personId"],
                 "made": row["shotResult"] == "Made",
             }
         )

@@ -1,9 +1,13 @@
-from closeout.data.tracking import build_quarter_timelines, find_frame_for_clock
+from closeout.data.tracking import build_quarter_timelines, find_frame_for_clock, find_release_frame
 
 
-def _moment(quarter, timestamp, game_clock):
+def _moment(quarter, timestamp, game_clock, positions=None):
     """Build a fake moment with just the fields build_quarter_timelines cares about."""
-    return [quarter, timestamp, game_clock, 24.0, None, []]
+    return [quarter, timestamp, game_clock, 24.0, None, positions or []]
+
+
+def _positions(ball_xy, shooter_id, shooter_xy):
+    return [[-1, -1, *ball_xy, 6.0], [1610612744, shooter_id, *shooter_xy]]
 
 
 def test_dedupes_overlapping_moments_across_events():
@@ -71,3 +75,58 @@ def test_find_frame_for_clock_returns_none_when_tracking_starts_late():
 
 def test_find_frame_for_clock_returns_none_for_empty_timeline():
     assert find_frame_for_clock([], 700.0) is None
+
+
+def test_find_release_frame_returns_last_close_approach():
+    shooter_id = 201939
+    timeline = [
+        # a dribble touch, well before the real release
+        _moment(1, 1000, 693.0, _positions((10.0, 10.0), shooter_id, (10.5, 10.0))),  # dist 0.5
+        _moment(1, 1010, 692.5, _positions((15.0, 10.0), shooter_id, (10.5, 10.0))),  # dist 4.5, ball bounced away
+        # the true release -- last time the ball is close to the shooter
+        _moment(1, 1020, 692.0, _positions((10.3, 10.0), shooter_id, (10.4, 10.0))),  # dist 0.1
+        _moment(1, 1030, 691.5, _positions((14.0, 10.0), shooter_id, (10.4, 10.0))),  # dist 3.6, in flight
+        # the play-by-play's recorded clock -- ball already near the rim, far from the shooter
+        _moment(1, 1040, 690.0, _positions((5.0, 25.0), shooter_id, (10.4, 10.0))),
+    ]
+
+    frame = find_release_frame(timeline, shooter_id, event_clock=690.0)
+
+    assert frame[1] == 1020
+
+
+def test_find_release_frame_returns_none_when_never_close():
+    shooter_id = 201939
+    timeline = [
+        _moment(1, 1000, 692.0, _positions((10.0, 10.0), shooter_id, (30.0, 10.0))),
+        _moment(1, 1010, 691.0, _positions((12.0, 10.0), shooter_id, (30.0, 10.0))),
+    ]
+
+    assert find_release_frame(timeline, shooter_id, event_clock=690.0) is None
+
+
+def test_find_release_frame_ignores_frames_outside_the_search_window():
+    shooter_id = 201939
+    timeline = [
+        # close approach, but 6 seconds before event_clock -- outside the default 5s window
+        _moment(1, 1000, 696.0, _positions((10.0, 10.0), shooter_id, (10.2, 10.0))),
+        _moment(1, 1010, 690.0, _positions((5.0, 25.0), shooter_id, (30.0, 10.0))),
+    ]
+
+    assert find_release_frame(timeline, shooter_id, event_clock=690.0) is None
+
+
+def test_find_release_frame_skips_frames_missing_ball_or_shooter():
+    shooter_id = 201939
+    timeline = [
+        _moment(1, 1000, 691.0, [[1610612744, shooter_id, 10.0, 10.0]]),  # no ball entry
+        _moment(1, 1010, 690.5, _positions((10.0, 10.0), shooter_id, (10.2, 10.0))),  # dist 0.2
+    ]
+
+    frame = find_release_frame(timeline, shooter_id, event_clock=690.0)
+
+    assert frame[1] == 1010
+
+
+def test_find_release_frame_returns_none_for_empty_timeline():
+    assert find_release_frame([], 201939, event_clock=690.0) is None
