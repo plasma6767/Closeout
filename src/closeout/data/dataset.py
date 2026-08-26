@@ -6,9 +6,7 @@ import json
 
 from closeout.data.matching import match_shots_to_frames
 from closeout.data.playbyplay import parse_shot_events
-from closeout.data.tracking import MOMENT_GAME_CLOCK
-
-BALL_TEAM_ID = -1
+from closeout.data.tracking import BALL_TEAM_ID, MOMENT_GAME_CLOCK
 
 
 def _positions_from_frame(frame: list) -> tuple[list, list] | None:
@@ -43,14 +41,15 @@ def _prior_frame_fields(prior_frame: list | None) -> dict:
 
 
 def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -> list[dict]:
-    """Build one row per shot for a game: shooter identity, make/miss, and raw frame positions.
+    """Build one row per shot for a game: shooter identity, make/miss, and release-frame positions.
 
     Shots get dropped here, rather than producing a row with missing data,
-    when: there's no matched frame (tracking coverage gaps -- see
-    match_shots_to_frames), or the matched frame has no ball entry at all
-    (the ball is occasionally untracked/occluded for a given frame in the
-    raw data). Each row also carries positions from about a second before
-    the shot (prior_* fields, absent if that frame isn't available) so
+    when: there's no matched release frame (tracking coverage gaps, or a
+    release the search window in match_shots_to_frames doesn't reach -- see
+    find_release_frame), or the matched frame has no ball entry at all (the
+    ball is occasionally untracked/occluded for a given frame in the raw
+    data). Each row also carries positions from about a second before the
+    release (prior_* fields, absent if that frame isn't available) so
     features like closing speed can be computed later without needing the
     raw tracking data again. Defender distance/angle and other derived
     features are computed later, in features/, not here.

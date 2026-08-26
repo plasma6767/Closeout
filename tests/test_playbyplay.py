@@ -1,7 +1,7 @@
 from closeout.data.playbyplay import parse_game_clock, parse_shot_events
 
 
-def _row(action_number, period, clock, action_type, is_field_goal, shot_result=None):
+def _row(action_number, period, clock, action_type, is_field_goal, shot_result=None, person_id=0):
     return {
         "actionNumber": action_number,
         "period": period,
@@ -9,6 +9,7 @@ def _row(action_number, period, clock, action_type, is_field_goal, shot_result=N
         "actionType": action_type,
         "isFieldGoal": is_field_goal,
         "shotResult": shot_result,
+        "personId": person_id,
     }
 
 
@@ -29,13 +30,13 @@ def test_parse_game_clock_rejects_unrecognized_format():
 
 def test_parse_shot_events_extracts_only_field_goal_attempts():
     rows = [
-        _row(1, 1, "PT11M32.00S", "2pt", True, "Made"),
+        _row(1, 1, "PT11M32.00S", "2pt", True, "Made", person_id=201939),
         _row(2, 1, "PT11M20.00S", "foul", False),
-        _row(3, 1, "PT10M58.00S", "3pt", True, "Missed"),
+        _row(3, 1, "PT10M58.00S", "3pt", True, "Missed", person_id=201142),
     ]
 
     shots = parse_shot_events(rows)
 
     assert len(shots) == 2
-    assert shots[0] == {"event_id": 1, "quarter": 1, "game_clock": 692.0, "made": True}
-    assert shots[1] == {"event_id": 3, "quarter": 1, "game_clock": 658.0, "made": False}
+    assert shots[0] == {"event_id": 1, "quarter": 1, "game_clock": 692.0, "shooter_id": 201939, "made": True}
+    assert shots[1] == {"event_id": 3, "quarter": 1, "game_clock": 658.0, "shooter_id": 201142, "made": False}
