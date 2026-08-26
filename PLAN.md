@@ -147,6 +147,44 @@ cutoff hits everyone equally, so it's not a biased sample), but the
 eventual Curry write-up (roadmap item 4) needs to frame results as "first
 half of the season" rather than implying the full season.
 
+**Fixed**, on `fix/shot-release-frame-detection`: found a real bug in the
+core shot-to-frame join, not just a limitation. What was believed validated
+(ball position lining up with shot descriptions) only checked where the
+ball ends up, not where it started -- the play-by-play's recorded clock for
+a shot lags the true release by 1.5-3.5 seconds in practice (it reflects
+roughly when the shot resolves: ball at the rim, a rebound scramble), so
+matching directly on that clock was landing on frames where the shooter
+could be 20+ feet from the ball. Checked across a sample of games: median
+shooter-to-ball distance at the old "matched" frame was 23 ft, with ball
+height at 4.4 ft (well below release height). This meant every downstream
+"defender distance/positioning at the shot" feature would have measured
+something closer to "positioning after the shot resolved," not shot
+difficulty at release.
+
+Fixed with `find_release_frame()` in `tracking.py`: scans backward from the
+recorded clock (up to 5 seconds) for the last frame where the ball was
+within 1.5 ft of the shooter. A dribble -- or a driving layup's slower
+gather, where the ball can drift a foot or two from the body before truly
+leaving the hand -- always brings the ball back close again; a true release
+never does, so the last close approach in the window is the release by
+construction. This works the same way for a flat-arced dunk as a high jump
+shot, without needing separate tuning per shot type (an earlier version of
+this heuristic that required the ball to visibly rise after separating was
+biased against dropping layups/dunks -- fixed before it shipped).
+`match_shots_to_frames()` now anchors both the shot frame and the prior
+frame off the detected release instead of the raw play-by-play clock.
+
+Re-ran the full batch: **632 of 635 games, 98,449 shots total** (down from
+105,163 -- the old code never actually failed to match more often, it just
+never refused to answer, so a chunk of those 105,163 were confidently wrong
+rather than correctly dropped). Checked whether the drop is biased toward
+close-range shots (a real concern, since easy shots being disproportionately
+excluded would skew the model toward overestimating shot difficulty): on
+one game the gap looked large (14.6% vs. 8.2% drop rate), but across a
+60-game sample (~10,000 shots) it narrows to 7.4% vs. 5.8% -- a small
+residual tilt, not a serious bias, and in the same category as the season-
+cutoff limitation above rather than something blocking further work.
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
