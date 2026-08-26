@@ -78,6 +78,8 @@ def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -
             "shooter_name": pbp_row["playerName"],
             "team": pbp_row["teamTricode"],
             "made": shot["made"],
+            "shot_type": shot["shot_type"],
+            "assisted": shot["assisted"],
             "ball_x": ball[2],
             "ball_y": ball[3],
             "ball_z": ball[4],
