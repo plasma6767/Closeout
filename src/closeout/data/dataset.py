@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 from closeout.data.matching import match_shots_to_frames
-from closeout.data.playbyplay import parse_shot_events
+from closeout.data.playbyplay import parse_shot_events, shot_rows_by_action_number
 from closeout.data.tracking import BALL_TEAM_ID, MOMENT_GAME_CLOCK
 
 
@@ -56,7 +56,7 @@ def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -
     """
     shots = parse_shot_events(pbp_rows)
     matched = match_shots_to_frames(events, shots)
-    pbp_by_action_number = {row["actionNumber"]: row for row in pbp_rows}
+    pbp_by_action_number = shot_rows_by_action_number(pbp_rows)
 
     rows = []
     for shot in matched:
@@ -74,7 +74,7 @@ def build_shot_dataset(game_id: str, pbp_rows: list[dict], events: list[dict]) -
             "event_id": shot["event_id"],
             "quarter": shot["quarter"],
             "game_clock": shot["game_clock"],
-            "shooter_id": pbp_row["personId"],
+            "shooter_id": shot["shooter_id"],
             "shooter_name": pbp_row["playerName"],
             "team": pbp_row["teamTricode"],
             "made": shot["made"],

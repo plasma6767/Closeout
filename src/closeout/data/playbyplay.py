@@ -33,6 +33,21 @@ def _is_assisted(description: str) -> bool:
     return description.rstrip().endswith("AST)")
 
 
+def shot_rows_by_action_number(rows: list[dict]) -> dict[int, dict]:
+    """Map actionNumber -> the real shot-attempt row, restricted to field goals.
+
+    A blocked shot (and, separately, a turnover) generates a second
+    play-by-play row at the *same* actionNumber crediting the blocker or
+    stealer (isFieldGoal False). A naive {actionNumber: row} dict built
+    from every row lets that companion row silently clobber the real
+    shot's entry -- confirmed against a real game where a missed, blocked
+    Singler layup ended up attributed to Faried (the blocker) because his
+    companion "BLOCK" row happened to come later in the list. Filtering to
+    isFieldGoal rows before building the dict avoids that collision.
+    """
+    return {row["actionNumber"]: row for row in rows if row.get("isFieldGoal")}
+
+
 def parse_shot_events(rows: list[dict]) -> list[dict]:
     """Pull shot attempts out of raw PlayByPlayV3 rows.
 

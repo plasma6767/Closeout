@@ -258,8 +258,8 @@ def test_compute_shot_features_matches_hand_verified_values_on_a_real_shot():
     assert features["second_defender_angle_deg"] == pytest.approx(26.578773, abs=1e-4)
     assert features["shooter_speed_ftps"] == pytest.approx(1.414079, abs=1e-5)
     assert features["closest_defender_closing_speed_ftps"] == pytest.approx(-0.299930, abs=1e-5)
-    # this row predates the shot_type/assisted backfill
-    assert features["catch_and_shoot"] is None
+    # this shot is an unassisted driving layup, not a catch-and-shoot jumper
+    assert features["catch_and_shoot"] is False
 
 
 def test_compute_shot_features_leaves_second_defender_none_with_only_one_defender():

@@ -1,12 +1,13 @@
-"""Backfill shot_type/assisted onto shot rows that were written before those fields existed.
+"""Backfill/correct play-by-play-derived fields on rows written by an older ingestion pipeline.
 
 The 632 games already processed into data/processed/*.jsonl were built
-before parse_shot_events() captured shot_type and assisted. Re-running the
-full pipeline would mean re-downloading every game's tracking archive again
-just to get two fields that only ever came from play-by-play in the first
-place. This re-fetches play-by-play only (fast, no tracking download) and
-merges the two fields onto the existing rows by event_id, which every row
-already has.
+before parse_shot_events() captured shot_type and assisted, and before
+build_shot_dataset() was fixed to no longer misattribute a blocked shot to
+its blocker (see shot_rows_by_action_number()'s docstring). Both are
+play-by-play-only problems -- the tracking-derived frame positions were
+never wrong -- so this re-fetches play-by-play only (fast, no tracking
+download) and overwrites shooter_id/shooter_name/team/shot_type/assisted
+on the existing rows by event_id, which every row already has.
 """
 
 from __future__ import annotations
@@ -15,31 +16,42 @@ import json
 from pathlib import Path
 
 from closeout.data.download import fetch_playbyplay_rows
-from closeout.data.playbyplay import parse_shot_events
+from closeout.data.playbyplay import parse_shot_events, shot_rows_by_action_number
 
 DEFAULT_PROCESSED_DIR = Path("data/processed")
 
 
 def backfill_rows(rows: list[dict], pbp_rows: list[dict]) -> list[dict]:
-    """Merge shot_type/assisted from freshly-parsed play-by-play onto existing rows.
+    """Re-derive shooter identity and shot type/assist from fresh play-by-play, by event_id.
 
     Matches by event_id, which is the same actionNumber both the existing
-    rows and a fresh parse_shot_events() call key off of. Raises if a row's
-    event_id has no match in the fresh play-by-play -- that would mean the
-    game's play-by-play changed shape since it was first ingested, which is
-    a real problem worth stopping for, not silently skipping.
+    rows and a fresh parse there key off of. Raises if a row's event_id has
+    no matching field-goal row in the fresh play-by-play -- that would mean
+    the game's play-by-play changed shape since it was first ingested,
+    which is a real problem worth stopping for, not silently skipping.
     """
     shots_by_event_id = {shot["event_id"]: shot for shot in parse_shot_events(pbp_rows)}
+    pbp_by_action_number = shot_rows_by_action_number(pbp_rows)
 
     backfilled = []
     for row in rows:
         shot = shots_by_event_id.get(row["event_id"])
-        if shot is None:
+        pbp_row = pbp_by_action_number.get(row["event_id"])
+        if shot is None or pbp_row is None:
             raise ValueError(
                 f"no play-by-play shot found for event_id {row['event_id']} "
                 f"in game {row.get('game_id')} -- play-by-play may have changed"
             )
-        backfilled.append({**row, "shot_type": shot["shot_type"], "assisted": shot["assisted"]})
+        backfilled.append(
+            {
+                **row,
+                "shooter_id": shot["shooter_id"],
+                "shooter_name": pbp_row["playerName"],
+                "team": pbp_row["teamTricode"],
+                "shot_type": shot["shot_type"],
+                "assisted": shot["assisted"],
+            }
+        )
 
     return backfilled
 
@@ -53,15 +65,19 @@ def backfill_game(game_id: str) -> list[dict]:
 
 
 def run_backfill(processed_dir: Path = DEFAULT_PROCESSED_DIR) -> list[dict]:
-    """Backfill every already-processed game in place; return one result dict per game."""
+    """Backfill/correct every already-processed game in place; return one result dict per game.
+
+    Always reprocesses every game rather than skipping ones that already
+    look backfilled -- this is a maintenance script whose correction logic
+    can itself change (as it just did, to fix shooter misattribution), and
+    a presence-based skip check would silently trust stale, already-wrong
+    content. 632 games at well under a second of network time each is a
+    trivial cost for that guarantee.
+    """
     results = []
     for path in sorted(processed_dir.glob("*.jsonl")):
         game_id = path.stem
         rows = [json.loads(line) for line in path.read_text().splitlines()]
-
-        if rows and "shot_type" in rows[0]:
-            results.append({"game_id": game_id, "status": "skipped"})
-            continue
 
         try:
             pbp_rows = fetch_playbyplay_rows(game_id)

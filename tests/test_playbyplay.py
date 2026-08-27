@@ -1,4 +1,4 @@
-from closeout.data.playbyplay import _is_assisted, parse_game_clock, parse_shot_events
+from closeout.data.playbyplay import _is_assisted, parse_game_clock, parse_shot_events, shot_rows_by_action_number
 
 
 def _row(
@@ -63,6 +63,31 @@ def test_is_assisted_false_for_an_unassisted_made_shot():
 
 def test_is_assisted_false_for_a_missed_shot():
     assert _is_assisted(_MISSED) is False
+
+
+def test_shot_rows_by_action_number_ignores_a_companion_block_row_at_the_same_number():
+    # real shape from game 0021500044, actionNumber 101: a missed, blocked
+    # layup generates two rows sharing one actionNumber -- the shot itself
+    # (isFieldGoal True) and a non-field-goal row crediting the blocker.
+    rows = [
+        _row(101, 1, "PT03M19.00S", "Missed Shot", True, "Missed", person_id=202713, sub_type="Alley Oop Layup shot"),
+        _row(101, 1, "PT03M19.00S", "Block", False, person_id=202702),
+    ]
+
+    by_action_number = shot_rows_by_action_number(rows)
+
+    assert by_action_number[101]["personId"] == 202713
+
+
+def test_shot_rows_by_action_number_ignores_a_companion_steal_row_at_the_same_number():
+    rows = [
+        _row(3, 1, "PT10M00.00S", "Turnover", False, person_id=201566),
+        _row(3, 1, "PT10M00.00S", "Steal", False, person_id=1626144),
+    ]
+
+    by_action_number = shot_rows_by_action_number(rows)
+
+    assert 3 not in by_action_number
 
 
 def test_parse_shot_events_extracts_only_field_goal_attempts():

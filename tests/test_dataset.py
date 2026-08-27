@@ -83,6 +83,55 @@ def test_builds_one_row_per_matched_shot_with_shooter_and_frame_info():
     assert row["players"] == [{"team_id": 1610612744, "player_id": 201939, "x": 5.0, "y": 24.0}]
 
 
+def test_attributes_a_blocked_shot_to_the_shooter_not_the_blocker():
+    # real shape from game 0021500044: a blocked, missed shot generates a
+    # companion "Block" row at the *same* actionNumber crediting the
+    # blocker. A naive {actionNumber: row} lookup can pick that row instead
+    # of the real shot, misattributing shooter identity and team.
+    events = [
+        {
+            "moments": [
+                _moment(
+                    1,
+                    1000,
+                    199.0,
+                    _positions((5.5, 25.0, 9.5), [(1610612744, 202713, 5.0, 24.0)]),
+                )
+            ]
+        }
+    ]
+    pbp_rows = [
+        _pbp_row(
+            101,
+            1,
+            "PT03M19.00S",
+            True,
+            shot_result="Missed",
+            person_id=202713,
+            player_name="Singler",
+            team="OKC",
+            sub_type="Alley Oop Layup shot",
+            description="MISS Singler 2' Alley Oop Layup",
+        ),
+        _pbp_row(
+            101,
+            1,
+            "PT03M19.00S",
+            False,
+            person_id=202702,
+            player_name="Faried",
+            team="DEN",
+        ),
+    ]
+
+    rows = build_shot_dataset("0021500044", pbp_rows, events)
+
+    assert len(rows) == 1
+    assert rows[0]["shooter_id"] == 202713
+    assert rows[0]["shooter_name"] == "Singler"
+    assert rows[0]["team"] == "OKC"
+
+
 def test_marks_a_shot_assisted_when_the_description_ends_in_ast():
     events = [
         {
