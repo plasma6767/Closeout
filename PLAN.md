@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-28
+Last updated: 2026-08-28 (modeling stage)
 
 ## The pitch
 
@@ -270,13 +270,48 @@ missing catch-and-shoot shots that are unassisted or get bucketed under a
 different subtype label. Only 379 shots (0.4%) are missing shooter/closing
 speed (no usable prior frame); 0 shots have zero tracked defenders.
 
+## Status: Stage 3 — modeling (done)
+
+Built on `feature/shot-quality-modeling`, in `src/closeout/models/`:
+
+- `dataset.py` loads every game's feature file into one table and splits
+  it into train/test **by game_id**, not by individual shot -- splitting
+  shot-by-shot would let shots from the same game land on both sides,
+  leaking that game's personnel/pace/matchups into what's supposed to be
+  a held-out evaluation.
+- `train.py` fits two models on the train split: a logistic-regression
+  baseline on shot distance alone, and an xgboost model (300 trees, depth
+  4) over every engineered feature (both defenders' distance/angle,
+  shooter/defender speed, catch-and-shoot). Both get evaluated on the
+  held-out games: AUC, log-loss, and a 10-bucket calibration table
+  (predicted vs. actual make rate, bucketed by quantile so buckets have
+  even shot counts rather than even probability width).
+
+Ran for real on the full 98,449-shot dataset:
+
+```
+baseline: AUC=0.6124  log_loss=0.6706
+full:     AUC=0.8423  log_loss=0.4571
+```
+
+The full model clearly wins -- distance alone explains some of shot
+difficulty, but defender positioning explains a lot more. Calibration on
+the full model is tight across the whole range (e.g. shots it called
+~35% went in 34% of the time, ~65% went in 65% of the time, ~91% went in
+92% of the time) -- the predicted probabilities aren't just well-ranked,
+they're trustworthy as actual probabilities, which matters for stage 4
+since the Curry analysis is a straight actual-vs-expected comparison.
+
+The full model gets refit on the entire dataset (train+test) and used to
+score `expected_fg_pct` for all 98,449 shots, written to
+`data/predictions/*.jsonl` (one file per game, same convention as
+`processed/`/`features/`, gitignored the same way).
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
 2. ~~**Feature engineering**~~ — done, see above.
-3. **Modeling** (`src/closeout/models/`): baseline (distance-only logistic
-   regression) vs. full-feature model (gradient boosting), evaluate with
-   AUC/log-loss/calibration, derive expected FG% per shot.
+3. ~~**Modeling**~~ — done, see above.
 4. **The Curry analysis**: compare Curry's actual vs. expected FG% across
    all his shots in the dataset vs. league average, write this up.
 5. **Dashboard/viz** (`app/`): shot chart colored by expected probability,
