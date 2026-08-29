@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-29 (dashboard/viz stage)
+Last updated: 2026-08-29 (all roadmap stages done)
 
 ## The pitch
 
@@ -366,6 +366,21 @@ switching to Whiteside shows shots clustered right at the rim, as expected
 for a center -- both the chart and leaderboard update correctly on player
 change.
 
+## Status: Stage 6 — README polish (done)
+
+Built on `docs/dashboard-readme-polish`:
+
+- Added `pyproject.toml` and did `pip install -e .` so `closeout` is a real
+  importable package. This wasn't just tidiness -- the README's own
+  `python -m closeout.analysis.shot_quality` reproduce command was actually
+  broken without `PYTHONPATH=src` set by hand (only `pytest.ini` set that,
+  for the test suite specifically), and `app/dashboard.py` was working
+  around the same gap with a manual `sys.path` hack. The editable install
+  fixes both -- the sys.path hack in `dashboard.py` is gone.
+- README now documents the dashboard and the fixed setup steps; project
+  structure section updated to mention `analysis/` (added in Stage 4, never
+  documented there).
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
@@ -373,6 +388,14 @@ change.
 3. ~~**Modeling**~~ — done, see above.
 4. ~~**The Curry analysis**~~ — done, see above.
 5. ~~**Dashboard/viz**~~ — done, see above.
-6. **README polish + push** once there's something real to show.
+6. ~~**README polish + push**~~ — done, see above.
+
+Every planned stage is done. Nothing is currently in progress. The main
+constraint on going further is the data source itself: the tracking mirror
+this project depends on stops at Jan 22, 2016, so there's no way to extend
+the Curry analysis to the rest of that season (73-9, 402 threes) without a
+different tracking data source, which isn't publicly available for
+post-2015-16 seasons (all tracking since is proprietary Second Spectrum
+data).
 
 Each numbered stage above = roughly "a feature" for commit/push purposes.

@@ -51,6 +51,17 @@ mirror's cutoff), not the full 73-9/402-three campaign.
 
 Reproduce with `python -m closeout.analysis.shot_quality`.
 
+## Dashboard
+
+`streamlit run app/dashboard.py` launches an interactive version of the
+findings above: pick any player with 200+ shots in the dataset (last names
+alone aren't unique -- e.g. Stephen and Seth Curry both played in 2015-16 --
+so the picker shows full names) and see their shot chart, colored by the
+model's expected FG% for each shot, next to the full league leaderboard and
+that player's rank. Shot charts drop the rare half-court heave rather than
+silently cutting it off at the edge of the court diagram, noting how many
+were left out.
+
 ## Project structure
 
 ```
@@ -58,8 +69,9 @@ src/closeout/
   data/       ingestion + parsing: tracking data, play-by-play, the join between them
   features/   feature engineering (defender distance/angle, shot distance, etc.)
   models/     model training and evaluation
-  viz/        shot charts and plotting utilities
-app/          dashboard (Streamlit)
+  analysis/   actual-vs-expected FG% comparisons (the Curry findings above)
+  viz/        the shot chart: court drawing + projecting shots onto one half-court
+app/          the Streamlit dashboard (dashboard.py)
 notebooks/    exploratory analysis
 tests/        test suite
 ```
@@ -70,11 +82,20 @@ tests/        test suite
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+pip install -e .
 ```
+
+The last step installs this repo itself in editable mode, so `closeout` is
+importable (and the commands above and in `app/dashboard.py` work) without
+having to set `PYTHONPATH` by hand.
 
 ## Status
 
-Actively in development. See `PLAN.md` for current progress and roadmap.
+All planned stages are done -- see `PLAN.md` for how each one was built and
+validated. Curry's shots (and everyone else's) are the point of the project,
+not a placeholder; extending past the tracking mirror's Jan 22 cutoff would
+need a different data source, since no later 2015-16 SportVU data is
+publicly available.
 
 ## License
 
