@@ -12,6 +12,8 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
+data/features/*
+!data/features/.gitkeep
 
 # OS
 .DS_Store
