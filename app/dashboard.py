@@ -3,17 +3,10 @@ the model's expected FG%) next to where they rank league-wide on
 actual-vs-expected FG%.
 
 Run with: streamlit run app/dashboard.py
+(requires `pip install -e .` first -- see README's Setup section)
 """
 
 from __future__ import annotations
-
-import sys
-from pathlib import Path
-
-# The package isn't pip-installed -- other entry points in this repo rely on
-# PYTHONPATH=src being set (see pytest.ini), but `streamlit run` doesn't read
-# that, so this makes the app runnable on its own.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import matplotlib.pyplot as plt
 import streamlit as st
