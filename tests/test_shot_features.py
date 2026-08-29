@@ -245,19 +245,21 @@ def test_catch_and_shoot_is_false_for_an_assisted_pullup():
 
 
 def test_compute_shot_features_matches_hand_verified_values_on_a_real_shot():
-    # game 0021500001, event 2 -- Horford at the rim, a real shot from the
+    # game 0021500001, event 2 -- Drummond at the rim, a real shot from the
     # actual processed dataset, not a synthetic fixture. Expected numbers
-    # cross-checked independently before being hardcoded here.
+    # cross-checked independently before being hardcoded here (post the
+    # shooter-misattribution fix -- this shot's shooter identity was itself
+    # corrected by that fix, from Horford to the real shooter, Drummond).
     features = compute_shot_features(REAL_SAMPLE_ROW, basket_x=BASKET_X_NEAR)
 
     assert features["shot_distance_ft"] == pytest.approx(1.214006, abs=1e-5)
     assert features["shot_angle_deg"] == pytest.approx(30.186387, abs=1e-5)
-    assert features["closest_defender_dist_ft"] == pytest.approx(1.400335, abs=1e-5)
-    assert features["closest_defender_angle_deg"] == pytest.approx(161.62166, abs=1e-4)
-    assert features["second_defender_dist_ft"] == pytest.approx(5.945674, abs=1e-5)
-    assert features["second_defender_angle_deg"] == pytest.approx(26.578773, abs=1e-4)
-    assert features["shooter_speed_ftps"] == pytest.approx(1.414079, abs=1e-5)
-    assert features["closest_defender_closing_speed_ftps"] == pytest.approx(-0.299930, abs=1e-5)
+    assert features["closest_defender_dist_ft"] == pytest.approx(1.350288, abs=1e-5)
+    assert features["closest_defender_angle_deg"] == pytest.approx(12.524869, abs=1e-4)
+    assert features["second_defender_dist_ft"] == pytest.approx(2.939687, abs=1e-5)
+    assert features["second_defender_angle_deg"] == pytest.approx(108.683118, abs=1e-4)
+    assert features["shooter_speed_ftps"] == pytest.approx(1.896310, abs=1e-5)
+    assert features["closest_defender_closing_speed_ftps"] == pytest.approx(0.373053, abs=1e-5)
     # this shot is an unassisted driving layup, not a catch-and-shoot jumper
     assert features["catch_and_shoot"] is False
 

@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-25
+Last updated: 2026-08-28
 
 ## The pitch
 
@@ -185,12 +185,95 @@ one game the gap looked large (14.6% vs. 8.2% drop rate), but across a
 residual tilt, not a serious bias, and in the same category as the season-
 cutoff limitation above rather than something blocking further work.
 
+## Status: Stage 2 — feature engineering (done)
+
+Built on `feature/shot-quality-features`, in `src/closeout/features/shot_features.py`:
+
+- **Shot distance & angle from the basket**, from the release-frame ball
+  position.
+- **Closest and second-closest defender**: distance to the ball, plus the
+  angle between the shooter-to-basket line and the shooter-to-defender
+  line -- distance alone can't tell "defender right in the shooting lane"
+  from "defender standing nearby but out of the play." Confirmed on a real
+  shot in the dataset (Casspi's driving dunk, game `0021500031`, event 113)
+  where the closest defender at 1.35 ft was at a 179.8-degree angle --
+  essentially standing directly behind the shooter, not contesting at all
+  despite being closer than any other player on the floor.
+- **Shooter speed and closest-defender closing speed**, from the release
+  frame vs. the ~1-second-prior frame already saved per shot.
+- **A catch-and-shoot proxy**: assisted + a plain, unqualified "Jump Shot"
+  subtype (excludes Pullup/Step Back/Turnaround/Driving/Running/Hook/
+  Dunk/Tip/Cutting/Alley-Oop variants, all of which mean the shooter
+  created it off movement). Not the NBA's own catch-and-shoot stat, which
+  also needs touch-time/dribble-count data this project doesn't have --
+  the standard proxy used in public analytics when that data isn't
+  available.
+
+**Which basket a team is attacking** is inferred per team, per half (teams
+switch baskets at halftime, not every quarter) by majority vote across all
+of that team's shots in the half, not from any single shot's own release
+position. Picking the nearer basket per-shot breaks on end-of-quarter
+heaves: the shooter is standing next to their *own* basket when a 90-foot
+heave leaves their hand, so a per-shot heuristic would score it as a
+point-blank attempt. Verified 495 of 98,449 shots (0.5%) have a computed
+shot distance over 40 ft -- consistent with genuine buzzer-beater heaves
+being handled correctly, not a sign of basket-side mixups.
+
+**shot_type and assisted required backfilling into the play-by-play.** The
+632 already-processed games predate these fields, and re-running the full
+tracking pipeline just to add them would mean re-downloading every
+tracking archive again for data that only ever came from play-by-play.
+Added `src/closeout/data/backfill.py`: re-fetches play-by-play only (no
+tracking download) and merges the fields onto existing rows by event_id.
+
+**Found and fixed a real, pre-existing bug while wiring up defender
+features**, not something this stage introduced: a blocked shot generates
+a second play-by-play row at the same `actionNumber`, crediting the
+blocker (e.g. a missed, blocked Singler layup in game `0021500044` also
+generated a companion row crediting Faried, the blocker). The original
+`build_shot_dataset()` built its actionNumber lookup from every row
+without filtering to real shot attempts, so that companion row could
+silently overwrite the real shot's entry in the lookup dict -- meaning
+`shooter_id`/`shooter_name`/`team` were wrong for a meaningful share of
+blocked shots across the whole dataset (one sampled game had 30 duplicate
+`actionNumber`s out of 495 total rows, roughly half of them shot+block
+pairs). The tracking-derived positions were never affected (frame matching
+always used the correct shooter id, sourced from the shot row itself), so
+nothing needed re-downloading -- fixed in `shot_rows_by_action_number()`
+(restricts the lookup to real field-goal rows) and folded into the same
+backfill pass that adds shot_type/assisted. This is exactly why the
+closest-defender feature raised on 12 games at first (the misattributed
+"shooter" genuinely wasn't on the court in that frame) -- after the fix,
+all 632 games process cleanly with 0 failures, same 98,449-shot total as
+the release-frame fix left it at.
+
+**New, smaller limitation found in the process, not yet fixed:** for shot
+types that should always be at the rim (layups, dunks, tip-ins, alley-oops
+-- 28,873 of the 98,449 shots), 2,494 (8.6% of that group, 2.5% of all
+shots) come out with a computed shot distance over 10 ft. This is a
+precision gap in the existing release-frame heuristic (`find_release_frame`
+in `tracking.py`, from the earlier release-frame fix), not something this
+stage's feature math got wrong: for some finishes -- reverse layups,
+finger rolls, alley-oops -- the ball can leave the hand from further than
+the 1.5 ft "near" threshold, or an earlier incidental close-approach (e.g.
+gathering a loose ball well before actually attacking the rim) gets picked
+instead of the true release. In the same category as the season cutoff and
+shot-drop-bias limitations already documented above: real, worth knowing
+about for modeling (may be worth an outlier filter on rim-type shots
+before training), but not blocking this stage.
+
+Final numbers: **98,449 shots featured across all 632 games, 0 failures.**
+Catch-and-shoot rate came out to 12.4% (12,169 shots) -- lower than the
+NBA's own ~20-25% catch-and-shoot rate, which makes sense given the proxy
+requires both an assist and the plain "Jump Shot" subtype specifically,
+missing catch-and-shoot shots that are unassisted or get bucketed under a
+different subtype label. Only 379 shots (0.4%) are missing shooter/closing
+speed (no usable prior frame); 0 shots have zero tracked defenders.
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
-2. **Feature engineering** (`src/closeout/features/`): closest/second-
-   closest defender distance & angle, shot distance/angle from basket,
-   shooter speed, catch-and-shoot vs. off-dribble, quarter/clock context.
+2. ~~**Feature engineering**~~ — done, see above.
 3. **Modeling** (`src/closeout/models/`): baseline (distance-only logistic
    regression) vs. full-feature model (gradient boosting), evaluate with
    AUC/log-loss/calibration, derive expected FG% per shot.
