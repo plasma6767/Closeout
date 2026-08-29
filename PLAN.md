@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-28 (modeling stage)
+Last updated: 2026-08-28 (Curry analysis stage)
 
 ## The pitch
 
@@ -307,13 +307,40 @@ score `expected_fg_pct` for all 98,449 shots, written to
 `data/predictions/*.jsonl` (one file per game, same convention as
 `processed/`/`features/`, gitignored the same way).
 
+## Status: Stage 4 — the Curry analysis (done)
+
+Built on `feature/curry-analysis`, in `src/closeout/analysis/shot_quality.py`:
+
+- `load_predictions()` loads every game's scored predictions file into one
+  table (same pattern as `models/dataset.py:load_features`, but reading
+  `data/predictions/` instead of `data/features/`, since expected_fg_pct
+  only exists after training).
+- `summarize_by_player()` groups shots by `shooter_id`, not `shooter_name`,
+  and computes actual FG%, expected FG%, and the gap between them. Grouping
+  by name would be a real bug here, not just sloppiness: Stephen and Seth
+  Curry both played in the league in 2015-16, and play-by-play only records
+  last names, so a name-based group-by silently merges their shots into one
+  row. Caught this by running the analysis once with the wrong grouping key
+  first (765 combined shots, 50.07% actual FG%) and once correctly split by
+  id (Stephen: 716 shots; Seth: 49) -- the two Curry brothers' numbers are
+  different enough that the merged version would have quietly overstated
+  Stephen's shot count and slightly skewed his rates.
+
+Ran for real on the full 98,449-shot predictions dataset: **Stephen Curry,
+716 shots, 50.6% actual FG% vs. 39.2% expected FG% (+11.4 percentage
+points)** -- the largest actual-minus-expected gap of any player in the
+league with 200+ shots in this window, ahead of Whiteside (+9.3) and Durant
+(+8.4). Sanity check: league-wide actual and expected FG% match exactly
+(44.56% both), as expected since the final model was refit on the entire
+dataset before scoring it. Write-up added to `README.md` under "Findings:
+Curry vs. shot difficulty."
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
 2. ~~**Feature engineering**~~ — done, see above.
 3. ~~**Modeling**~~ — done, see above.
-4. **The Curry analysis**: compare Curry's actual vs. expected FG% across
-   all his shots in the dataset vs. league average, write this up.
+4. ~~**The Curry analysis**~~ — done, see above.
 5. **Dashboard/viz** (`app/`): shot chart colored by expected probability,
    plus the actual-vs-expected leaderboard, likely Streamlit.
 6. **README polish + push** once there's something real to show.
