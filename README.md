@@ -33,6 +33,24 @@ tracking data for anyone), totaling 105,000+ labeled shots. Curry's own
 shots are one slice of that dataset, used for the actual-vs-expected
 comparison the project is built around.
 
+## Findings: Curry vs. shot difficulty
+
+Comparing actual makes against the model's expected FG% for every shot in
+the dataset (Oct 2015 – Jan 2016, the tracking mirror's cutoff), Stephen
+Curry made 50.6% of his 716 shots against an expected 39.2% — about 82 more
+makes than an average shooter would get on the same shots. That +11.4
+percentage point gap is the largest of any player in the league with at
+least 200 shots in this window, ahead of Hassan Whiteside (+9.3) and Kevin
+Durant (+8.4).
+
+This isn't "Curry took easy shots and made them" — the expected FG% already
+accounts for shot difficulty (defender distance, angle, closing speed), so
+the gap is shot-making skill beyond what positioning alone predicts. Note
+this covers roughly the first half of the 2015-16 season (the tracking
+mirror's cutoff), not the full 73-9/402-three campaign.
+
+Reproduce with `python -m closeout.analysis.shot_quality`.
+
 ## Project structure
 
 ```
