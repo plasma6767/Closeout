@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 
 from closeout.analysis.shot_quality import CURRY_PLAYER_ID, load_predictions, player_rank, summarize_by_player
+from closeout.data.players import full_name_for
 from closeout.viz.shot_chart import add_normalized_coords, plot_shot_chart
 
 MIN_SHOTS = 200
@@ -39,11 +40,17 @@ st.caption(
 df = load_normalized_predictions()
 summary = summarize_by_player(df, min_shots=MIN_SHOTS)
 
-# Disambiguate same-last-name players (e.g. Stephen & Seth Curry) only where
-# it actually matters, rather than cluttering every row with a player id.
-name_counts = summary["shooter_name"].value_counts()
+# play-by-play only records last names (e.g. "Curry" for both Stephen and
+# Seth) -- look up full names for display so the picker and leaderboard
+# aren't just a wall of last names.
+summary["full_name"] = summary.apply(lambda r: full_name_for(r["shooter_id"], r["shooter_name"]), axis=1)
+
+# full names resolve almost every collision on their own; disambiguate
+# anything left (e.g. two players who really do share a full name) rather
+# than cluttering every row with a player id.
+name_counts = summary["full_name"].value_counts()
 summary["label"] = summary.apply(
-    lambda r: f"{r.shooter_name} (#{r.shooter_id})" if name_counts[r.shooter_name] > 1 else r.shooter_name,
+    lambda r: f"{r.full_name} (#{r.shooter_id})" if name_counts[r.full_name] > 1 else r.full_name,
     axis=1,
 )
 
@@ -55,21 +62,21 @@ col1, col2 = st.columns([3, 2])
 
 with col1:
     player_shots = df[df["shooter_id"] == selected["shooter_id"]]
-    ax = plot_shot_chart(player_shots, title=f"{selected['shooter_name']} -- {int(selected['n_shots'])} shots")
+    ax = plot_shot_chart(player_shots, title=f"{selected['full_name']} -- {int(selected['n_shots'])} shots")
     st.pyplot(ax.figure)
     plt.close(ax.figure)
 
 with col2:
     rank = player_rank(summary, selected["shooter_id"])
     st.metric(
-        f"{selected['shooter_name']}: actual FG%",
+        f"{selected['full_name']}: actual FG%",
         f"{selected['actual_fg_pct']:.1%}",
         f"{selected['diff'] * 100:+.1f} pts vs. {selected['expected_fg_pct']:.1%} expected",
     )
     st.caption(f"League rank: #{rank} of {len(summary)} players with {MIN_SHOTS}+ shots")
 
     st.subheader("League leaderboard")
-    display = summary[["shooter_name", "n_shots", "actual_fg_pct", "expected_fg_pct", "diff"]].copy()
+    display = summary[["full_name", "n_shots", "actual_fg_pct", "expected_fg_pct", "diff"]].copy()
     display["actual_fg_pct"] = (display["actual_fg_pct"] * 100).round(1)
     display["expected_fg_pct"] = (display["expected_fg_pct"] * 100).round(1)
     display["diff"] = (display["diff"] * 100).round(1)
