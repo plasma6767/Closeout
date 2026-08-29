@@ -1,6 +1,6 @@
 # Closeout — project plan & status
 
-Last updated: 2026-08-28 (Curry analysis stage)
+Last updated: 2026-08-29 (dashboard/viz stage)
 
 ## The pitch
 
@@ -335,14 +335,44 @@ league with 200+ shots in this window, ahead of Whiteside (+9.3) and Durant
 dataset before scoring it. Write-up added to `README.md` under "Findings:
 Curry vs. shot difficulty."
 
+## Status: Stage 5 — dashboard/viz (done)
+
+Built on `feature/dashboard`, in `src/closeout/viz/shot_chart.py` and `app/dashboard.py`:
+
+- `add_normalized_coords()` projects every shot onto one canonical
+  half-court. Shots are stored on the full 94x50 court with two baskets at
+  opposite ends (see `infer_basket_sides()` from the features stage), so a
+  shot chart needs them all on one end first. Re-runs `infer_basket_sides()`
+  per game (must be the whole game's shots, not one player's -- a single
+  player's shots in a half are too few to trust the team-direction vote)
+  and rotates far-basket shots 180 degrees rather than mirroring them, so a
+  shot's real left/right stays correct relative to its own hoop (mirroring
+  would have flipped it).
+- `draw_half_court()` / `plot_shot_chart()`: a dark court (hoop drawn at the
+  top) with shots colored by `expected_fg_pct` on a dedicated orange
+  sequential ramp, kept deliberately separate from the court's own blue
+  accent color so court chrome and shot data never compete for the same
+  hue. Makes vs. misses are shown as marker shape (circle/x), not a second
+  color.
+- `app/dashboard.py`: a Streamlit app tying the shot chart to the
+  actual-vs-expected leaderboard from Stage 4 -- pick a player (defaulting
+  to Curry), see their shot chart next to the full leaderboard and their
+  league rank. Disambiguates same-last-name players (Stephen vs. Seth
+  Curry) in the picker only where a name is genuinely ambiguous.
+
+Verified in a real browser session (`streamlit run app/dashboard.py`):
+Curry's chart reproduces the Stage 4 numbers exactly (#1, +11.4 pts), and
+switching to Whiteside shows shots clustered right at the rim, as expected
+for a center -- both the chart and leaderboard update correctly on player
+change.
+
 ## Roadmap
 
 1. ~~**Data ingestion module**~~ — done, see above.
 2. ~~**Feature engineering**~~ — done, see above.
 3. ~~**Modeling**~~ — done, see above.
 4. ~~**The Curry analysis**~~ — done, see above.
-5. **Dashboard/viz** (`app/`): shot chart colored by expected probability,
-   plus the actual-vs-expected leaderboard, likely Streamlit.
+5. ~~**Dashboard/viz**~~ — done, see above.
 6. **README polish + push** once there's something real to show.
 
 Each numbered stage above = roughly "a feature" for commit/push purposes.
