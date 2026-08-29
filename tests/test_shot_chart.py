@@ -84,4 +84,28 @@ def test_plot_shot_chart_runs_on_a_normalized_frame():
     ax = plot_shot_chart(df, title="test")
 
     assert len(ax.collections) == 2  # one scatter call for makes, one for misses
+    assert len(ax.texts) == 0  # no off-frame shots, no caption needed
+    plt.close(ax.figure)
+
+
+def test_plot_shot_chart_excludes_off_frame_heaves_and_captions_the_count():
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    normal_shot = add_normalized_coords(pd.DataFrame([_shot("g1", "ATL", 1, 6.0, BASKET_Y, made=True)]))
+    heave = normal_shot.iloc[[0]].copy()
+    heave["norm_y"] = -60.0  # beyond half-court
+    heave["made"] = False
+    df = pd.concat([normal_shot, heave], ignore_index=True)
+
+    ax = plot_shot_chart(df)
+
+    # only the normal shot's make gets scattered -- the heave is dropped, not
+    # silently clipped
+    makes_scatter = ax.collections[0]
+    assert len(makes_scatter.get_offsets()) == 1
+
+    assert len(ax.texts) == 1
+    assert "1 heave" in ax.texts[0].get_text()
     plt.close(ax.figure)

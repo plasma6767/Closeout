@@ -31,6 +31,12 @@ TEXT_COLOR = "#ffffff"
 # likely to go in," regardless of which end of the scale you're looking at.
 EXPECTED_FG_CMAP = LinearSegmentedColormap.from_list("expected_fg_pct", ["#7a4a1e", "#ffb347"])
 
+# The frame drawn by draw_half_court() covers one regulation half-court --
+# anything beyond it is a heave, not a meaningful shot-quality data point.
+COURT_HALF_LENGTH_FT = 47.0
+COURT_HALF_WIDTH_FT = 25.0
+MUTED_TEXT_COLOR = "#898781"
+
 
 def add_normalized_coords(df: pd.DataFrame) -> pd.DataFrame:
     """Project every shot onto one canonical half-court: hoop at the top.
@@ -108,12 +114,20 @@ def plot_shot_chart(df: pd.DataFrame, ax: Axes | None = None, title: str | None 
     plotting is per-player, but normalizing needs the whole dataset, so the
     two steps are deliberately kept separate rather than folded together
     here.
+
+    Heave releases beyond half-court are dropped rather than plotted (they'd
+    otherwise just get silently clipped by the axes limits with no
+    indication) -- a caption below the court notes how many were excluded.
     """
     if ax is None:
         _, ax = plt.subplots(figsize=(6.4, 6.8))
         ax.figure.patch.set_facecolor(SURFACE_COLOR)
 
     draw_half_court(ax)
+
+    off_frame = (df["norm_y"] < -COURT_HALF_LENGTH_FT) | (df["norm_x"].abs() > COURT_HALF_WIDTH_FT)
+    n_off_frame = int(off_frame.sum())
+    df = df[~off_frame]
 
     makes = df[df["made"]]
     misses = df[~df["made"]]
@@ -126,6 +140,14 @@ def plot_shot_chart(df: pd.DataFrame, ax: Axes | None = None, title: str | None 
         ax.scatter(
             misses["norm_x"], misses["norm_y"], c=misses["expected_fg_pct"], cmap=EXPECTED_FG_CMAP,
             vmin=0, vmax=1, s=45, marker="x",
+        )
+
+    if n_off_frame:
+        ax.set_ylim(-51, 2)  # room for the caption below the court's own boundary
+        noun = "heave" if n_off_frame == 1 else "heaves"
+        ax.text(
+            0, -48.5, f"({n_off_frame} {noun} beyond half-court not pictured)",
+            ha="center", va="top", color=MUTED_TEXT_COLOR, fontsize=8, clip_on=False,
         )
 
     if title:
